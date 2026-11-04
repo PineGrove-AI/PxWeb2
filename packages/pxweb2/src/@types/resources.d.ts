@@ -406,6 +406,10 @@ export default interface Resources {
       no_result_search_help: 'Search help';
       result_hidden_header: 'Result';
       search_label: 'Search in PxWeb 2.0';
+      search_mode: {
+        aria: 'Search mode';
+        keyword: 'Keyword search';
+      };
       search_placeholder: '';
       'skip_to.filter': 'Skip to filter';
       'skip_to.result': 'Skip to result';

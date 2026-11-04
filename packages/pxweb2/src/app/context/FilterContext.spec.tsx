@@ -286,6 +286,52 @@ describe('FilterContext', () => {
     expect(state.filteredTables).toHaveLength(3);
   });
 
+  it('ADD_QUERY_FILTER keeps the table list order unless the result is ranked', () => {
+    render(
+      <FilterProvider>
+        <Consumer onRender={(ctx) => (captured = ctx)} />
+      </FilterProvider>,
+    );
+
+    act(() => {
+      captured!.dispatch({
+        type: ActionType.RESET_FILTERS,
+        payload: { tables: makeTables(3), subjects: makeSubjects() },
+      });
+    });
+
+    act(() => {
+      captured!.dispatch({
+        type: ActionType.ADD_QUERY_FILTER,
+        payload: { query: 'Q1', tableIds: ['T3', 'T1'] },
+      });
+    });
+
+    expect(captured!.state.filteredTables.map((t) => t.id)).toEqual([
+      'T1',
+      'T3',
+    ]);
+
+    // Ranked: the order of the IDs, skipping unknown and repeated IDs
+    act(() => {
+      captured!.dispatch({
+        type: ActionType.ADD_QUERY_FILTER,
+        payload: {
+          query: 'Q2',
+          tableIds: ['T3', 'UNKNOWN', 'T1', 'T3'],
+          ranked: true,
+        },
+      });
+    });
+
+    const state = captured!.state;
+    expect(state.filteredTables.map((t) => t.id)).toEqual(['T3', 'T1']);
+    expect(state.availableTablesWhenQueryApplied.map((t) => t.id)).toEqual([
+      'T3',
+      'T1',
+    ]);
+  });
+
   it('REMOVE_FILTER removes by value or uniqueId and recomputes state', () => {
     render(
       <FilterProvider>

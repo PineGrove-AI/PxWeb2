@@ -42,6 +42,9 @@ vi.mock('../../context/useApp', () => ({
 
 // Mock the getAllTables function
 vi.mock('../../util/tableHandler', () => ({
+  // Used by the filter reducer when a search runs: keep every table
+  buildCompiledMatcher: vi.fn(() => ({})),
+  shouldTableBeIncludedWithMatcher: vi.fn(() => true),
   getAllTables: vi.fn().mockResolvedValue([
     {
       id: '13618',
@@ -121,6 +124,22 @@ vi.mock('../../util/hooks/useTopicIcons', () => {
     ],
   };
 });
+
+// Table search providers (plugins in the API); none unless a test sets them
+let mockTableSearchProviders: {
+  id: string;
+  label: string;
+  url: string;
+}[] = [];
+vi.mock('../../util/hooks/useTableSearchProviders', () => ({
+  useTableSearchProviders: () => mockTableSearchProviders,
+}));
+
+vi.mock('../../util/tableSearchProviders', () => ({
+  searchTables: vi.fn(),
+}));
+
+import { searchTables } from '../../util/tableSearchProviders';
 
 // Import the mocked hooks for use in the harness
 import useApp from '../../context/useApp';
@@ -595,6 +614,119 @@ describe('StartPage', () => {
         expect(screen.getByTestId('mock-icon-small')).toBeInTheDocument();
       });
       expect(screen.queryByTestId('mock-icon-medium')).toBeNull();
+    });
+  });
+  describe('table search providers', () => {
+    const provider = {
+      id: 'smart-search',
+      label: 'Smart search',
+      url: 'https://api.example.com/plugins/smart-search/search',
+    };
+
+    const renderStartPage = () =>
+      renderWithProviders(
+        <AccessibilityProvider>
+          <MemoryRouter>
+            <StartPage />
+          </MemoryRouter>
+        </AccessibilityProvider>,
+      );
+
+    afterEach(() => {
+      mockTableSearchProviders = [];
+      (searchTables as Mock).mockReset();
+    });
+
+    it('shows no search mode toggle without providers', async () => {
+      renderStartPage();
+
+      await waitFor(() => {
+        expect(
+          screen.getByPlaceholderText('start_page.search_placeholder'),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.queryByRole('list', { name: 'start_page.search_mode.aria' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows keyword search and each provider, keyword search selected', async () => {
+      mockTableSearchProviders = [provider];
+      renderStartPage();
+
+      const keyword = await screen.findByRole('button', {
+        name: 'start_page.search_mode.keyword',
+      });
+      const smart = screen.getByRole('button', { name: 'Smart search' });
+
+      expect(keyword).toHaveAttribute('aria-pressed', 'true');
+      expect(smart).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('searches with the selected provider and shows its note', async () => {
+      mockTableSearchProviders = [provider];
+      (searchTables as Mock).mockResolvedValue({
+        tableIds: ['13619', '13618'],
+        ranked: true,
+        note: 'Searched for employment by age',
+      });
+      renderStartPage();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Smart search' }),
+      );
+      fireEvent.change(
+        screen.getByPlaceholderText('start_page.search_placeholder'),
+        { target: { value: 'jobs for young people' } },
+      );
+
+      await waitFor(
+        () => {
+          expect(searchTables).toHaveBeenCalledWith(
+            'jobs for young people',
+            'en',
+            provider,
+          );
+        },
+        { timeout: 3000 },
+      );
+      expect(
+        await screen.findByText('Searched for employment by age'),
+      ).toBeInTheDocument();
+    });
+
+    it('runs the current query again when the search mode changes', async () => {
+      mockTableSearchProviders = [provider];
+      (searchTables as Mock).mockResolvedValue({
+        tableIds: ['13618'],
+        ranked: false,
+      });
+      renderStartPage();
+
+      fireEvent.change(
+        await screen.findByPlaceholderText('start_page.search_placeholder'),
+        { target: { value: 'employment' } },
+      );
+      await waitFor(
+        () => {
+          expect(searchTables).toHaveBeenCalledWith(
+            'employment',
+            'en',
+            undefined,
+          );
+        },
+        { timeout: 3000 },
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Smart search' }));
+
+      await waitFor(() => {
+        expect(searchTables).toHaveBeenLastCalledWith(
+          'employment',
+          'en',
+          provider,
+        );
+      });
     });
   });
 });

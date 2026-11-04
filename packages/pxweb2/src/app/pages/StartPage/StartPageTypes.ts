@@ -98,7 +98,9 @@ type AddSearchFilterAction = {
 
 type AddQueryFilterAction = {
   type: ActionType.ADD_QUERY_FILTER;
-  payload: { query: string; tableIds: string[] };
+  // ranked: show the tables in the order of tableIds (best match first)
+  // instead of the order of the full table list.
+  payload: { query: string; tableIds: string[]; ranked?: boolean };
 };
 
 type UpdateTablesAction = {

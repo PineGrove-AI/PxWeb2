@@ -81,6 +81,10 @@
     "result_hidden_header": "Resultat",
     "search_label": "Søk i Statistikkbanken",
     "search_placeholder": "",
+    "search_mode": {
+      "aria": "Søkemodus",
+      "keyword": "Søkeord"
+    },
     "skip_to.filter": "Gå til filter",
     "skip_to.result": "Gå til resultat",
     "filter": {

@@ -80,6 +80,21 @@ function getAvailableTables(state: StartPageState): Table[] {
   }
 }
 
+// Returns the tables with the given IDs, in the order of the IDs. IDs that are
+// not in the table list, and repeated IDs, are skipped.
+function getTablesInIdOrder(tables: Table[], tableIds: string[]): Table[] {
+  const tablesById = new Map(tables.map((table) => [table.id, table]));
+  const seen = new Set<string>();
+  return tableIds.flatMap((id) => {
+    const table = tablesById.get(id);
+    if (!table || seen.has(id)) {
+      return [];
+    }
+    seen.add(id);
+    return [table];
+  });
+}
+
 function reducer(
   state: StartPageState,
   action: ReducerActionTypes,
@@ -246,9 +261,11 @@ function reducer(
       } else {
         // Query present: first narrow to API-returned table IDs, then apply
         // all other active filters on that subset.
-        queryTables = state.availableTables.filter((table) =>
-          action.payload.tableIds.includes(table.id),
-        );
+        queryTables = action.payload.ranked
+          ? getTablesInIdOrder(state.availableTables, action.payload.tableIds)
+          : state.availableTables.filter((table) =>
+              action.payload.tableIds.includes(table.id),
+            );
 
         const matcher = buildCompiledMatcher(newFilters);
         newTables = queryTables.filter((table) =>
