@@ -1,7 +1,7 @@
 import { useMemo, useReducer } from 'react';
 import { vi, Mock } from 'vitest';
 import { MemoryRouter } from 'react-router';
-import { waitFor, screen, fireEvent } from '@testing-library/react';
+import { act, waitFor, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import StartPage from './StartPage';
@@ -632,6 +632,12 @@ describe('StartPage', () => {
         </AccessibilityProvider>,
       );
 
+    beforeEach(() => {
+      // The page writes its query to the URL and seeds its search from it, so
+      // a query from an earlier test would be searched for on mount.
+      globalThis.window.history.replaceState(null, '', '/');
+    });
+
     afterEach(() => {
       mockTableSearchProviders = [];
       (searchTables as Mock).mockReset();
@@ -727,6 +733,89 @@ describe('StartPage', () => {
           provider,
         );
       });
+    });
+
+    it('searches with keyword search again when switching back from a provider', async () => {
+      mockTableSearchProviders = [provider];
+      (searchTables as Mock).mockResolvedValue({
+        tableIds: ['13618'],
+        ranked: false,
+      });
+      renderStartPage();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Smart search' }),
+      );
+      fireEvent.change(
+        screen.getByPlaceholderText('start_page.search_placeholder'),
+        { target: { value: 'employment' } },
+      );
+      await waitFor(
+        () => {
+          expect(searchTables).toHaveBeenLastCalledWith(
+            'employment',
+            'en',
+            provider,
+          );
+        },
+        { timeout: 3000 },
+      );
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start_page.search_mode.keyword' }),
+      );
+
+      await waitFor(() => {
+        expect(searchTables).toHaveBeenLastCalledWith(
+          'employment',
+          'en',
+          undefined,
+        );
+      });
+    });
+
+    it('ignores a search answered after a newer one', async () => {
+      mockTableSearchProviders = [provider];
+      const keywordResult = { tableIds: ['13618'], ranked: false };
+      let answerSlowSearch: (value: unknown) => void = () => undefined;
+      (searchTables as Mock)
+        .mockResolvedValueOnce(keywordResult)
+        .mockImplementationOnce(
+          () => new Promise((resolve) => (answerSlowSearch = resolve)),
+        )
+        .mockResolvedValueOnce(keywordResult)
+        .mockResolvedValueOnce({
+          tableIds: ['13618'],
+          ranked: true,
+          note: 'Fresh note',
+        });
+      renderStartPage();
+
+      fireEvent.change(
+        await screen.findByPlaceholderText('start_page.search_placeholder'),
+        { target: { value: 'employment' } },
+      );
+      await waitFor(() => expect(searchTables).toHaveBeenCalledTimes(1), {
+        timeout: 3000,
+      });
+      const keyword = screen.getByRole('button', {
+        name: 'start_page.search_mode.keyword',
+      });
+      const smart = screen.getByRole('button', { name: 'Smart search' });
+
+      // A slow provider search, overtaken by the two searches after it.
+      fireEvent.click(smart);
+      fireEvent.click(keyword);
+      fireEvent.click(smart);
+      expect(await screen.findByText('Fresh note')).toBeInTheDocument();
+      expect(searchTables).toHaveBeenCalledTimes(4);
+
+      await act(async () => {
+        answerSlowSearch({ tableIds: [], ranked: true, note: 'Stale note' });
+      });
+
+      expect(screen.getByText('Fresh note')).toBeInTheDocument();
+      expect(screen.queryByText('Stale note')).not.toBeInTheDocument();
     });
   });
 });

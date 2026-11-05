@@ -128,7 +128,7 @@ const StartPage = () => {
     const params = new URLSearchParams(globalThis.window.location.search);
     const queryText = params.get('query') || '';
     if (queryText) {
-      updateQueryFilter(queryText);
+      updateQueryFilter(queryText, activeSearchProvider);
     }
     // run only once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -570,6 +570,10 @@ const StartPage = () => {
     </>
   );
 
+  // Counts the searches started, so a slow search that is overtaken by a newer
+  // one (e.g. after switching search mode) does not overwrite its results.
+  const latestSearch = useRef(0);
+
   // Debounce the dispatch for search filter, so it waits a few moments for typing to finish
   const debouncedDispatch = useRef(
     debounce(
@@ -578,6 +582,7 @@ const StartPage = () => {
         language: string,
         provider?: TableSearchProvider,
       ) => {
+        const search = ++latestSearch.current;
         let tableIds: string[] = [];
         let ranked = false;
         let note: string | undefined;
@@ -587,6 +592,9 @@ const StartPage = () => {
             language,
             provider,
           ));
+        }
+        if (search !== latestSearch.current) {
+          return;
         }
         dispatch({
           type: ActionType.ADD_QUERY_FILTER,
@@ -600,9 +608,12 @@ const StartPage = () => {
     ),
   ).current;
 
+  // provider is undefined for the keyword search. It is not defaulted to the
+  // active provider: a mode change passes the new mode's provider before the
+  // state has caught up.
   const updateQueryFilter = (
     value: string,
-    provider: TableSearchProvider | undefined = activeSearchProvider,
+    provider: TableSearchProvider | undefined,
   ) => {
     setIsFadingTableList(true);
     debouncedDispatch(value, i18n.language, provider);
@@ -880,7 +891,7 @@ const StartPage = () => {
                       ?.label as string) ?? ''
                   }
                   onChange={(value: string) => {
-                    updateQueryFilter(value);
+                    updateQueryFilter(value, activeSearchProvider);
                   }}
                 />
                 {renderSearchModes()}
