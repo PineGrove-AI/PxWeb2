@@ -45,11 +45,7 @@ import useApp from '../../context/useApp';
 import { getConfig } from '../../util/config/getConfig';
 import { FilterContext, FilterProvider } from '../../context/FilterContext';
 import { getAllTables } from '../../util/tableHandler';
-import {
-  searchTables,
-  type TableSearchProvider,
-} from '../../util/tableSearchProviders';
-import { useTableSearchProviders } from '../../util/hooks/useTableSearchProviders';
+import { useTableSearchModes } from './useTableSearchModes';
 import { tableListIsReadyToRender } from '../../util/startPageRender';
 import useFilterUrlSync from '../../util/hooks/useFilterUrlSync';
 import StartpageDetails from '../../components/StartPageDetails/StartPageDetails';
@@ -66,10 +62,6 @@ import {
 import { createTableListSEO } from '../../util/seo/tableListSEO';
 import WipStatusMessage from '../../components/Banners/WipStatusMessage';
 import { applyTableCardTitleTransform } from '../../util/tableCardTitleTransform';
-
-// The search mode for the API's own keyword search. Other modes are the ids of
-// table search providers (plugins in the API).
-const KEYWORD_SEARCH_MODE = 'keyword';
 
 const StartPage = () => {
   const { t, i18n } = useTranslation();
@@ -93,13 +85,7 @@ const StartPage = () => {
   const [isPaginating, setIsPaginating] = useState(false);
   const [paginationButtonWidth, setPaginationButtonWidth] = useState<number>();
   const [isFadingTableList, setIsFadingTableList] = useState(false);
-  const [searchMode, setSearchMode] = useState(KEYWORD_SEARCH_MODE);
-  const [searchNote, setSearchNote] = useState<string>();
-
-  const tableSearchProviders = useTableSearchProviders();
-  const activeSearchProvider = tableSearchProviders.find(
-    (provider) => provider.id === searchMode,
-  );
+  const tableSearch = useTableSearchModes();
 
   const filterBackButtonRef = useRef<HTMLButtonElement>(null);
   const filterToggleRef = useRef<HTMLButtonElement>(null);
@@ -128,7 +114,7 @@ const StartPage = () => {
     const params = new URLSearchParams(globalThis.window.location.search);
     const queryText = params.get('query') || '';
     if (queryText) {
-      updateQueryFilter(queryText, activeSearchProvider);
+      updateQueryFilter(queryText);
     }
     // run only once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -571,108 +557,32 @@ const StartPage = () => {
   );
 
   // Counts the searches started, so a slow search that is overtaken by a newer
-  // one (e.g. after switching search mode) does not overwrite its results.
+  // one does not overwrite its results.
   const latestSearch = useRef(0);
 
   // Debounce the dispatch for search filter, so it waits a few moments for typing to finish
   const debouncedDispatch = useRef(
-    debounce(
-      async (
-        value: string,
-        language: string,
-        provider?: TableSearchProvider,
-      ) => {
-        const search = ++latestSearch.current;
-        let tableIds: string[] = [];
-        let ranked = false;
-        let note: string | undefined;
-        if (value.length > 0) {
-          ({ tableIds, ranked, note } = await searchTables(
-            value,
-            language,
-            provider,
-          ));
-        }
-        if (search !== latestSearch.current) {
-          return;
-        }
-        dispatch({
-          type: ActionType.ADD_QUERY_FILTER,
-          payload: { query: value, tableIds: tableIds, ranked: ranked },
-        });
-        setSearchNote(note);
-        setVisibleCount(paginationCount);
-        setIsFadingTableList(false);
-      },
-      700,
-    ),
+    debounce(async (value: string, language: string) => {
+      const search = ++latestSearch.current;
+      let tableIds: string[] = [];
+      if (value.length > 0) {
+        tableIds = await tableSearch.search(value, language);
+      }
+      if (search !== latestSearch.current) {
+        return;
+      }
+      dispatch({
+        type: ActionType.ADD_QUERY_FILTER,
+        payload: { query: value, tableIds: tableIds },
+      });
+      setVisibleCount(paginationCount);
+      setIsFadingTableList(false);
+    }, 700),
   ).current;
 
-  // provider is undefined for the keyword search. It is not defaulted to the
-  // active provider: a mode change passes the new mode's provider before the
-  // state has caught up.
-  const updateQueryFilter = (
-    value: string,
-    provider: TableSearchProvider | undefined,
-  ) => {
+  const updateQueryFilter = (value: string) => {
     setIsFadingTableList(true);
-    debouncedDispatch(value, i18n.language, provider);
-  };
-
-  const getQueryFilter = () =>
-    state.activeFilters.find((f) => f.type === 'query');
-
-  // Switching the search mode runs the current query again in the new mode.
-  const changeSearchMode = (mode: string) => {
-    if (mode === searchMode) {
-      return;
-    }
-    setSearchMode(mode);
-    const query = getQueryFilter()?.label ?? '';
-    if (query.length > 0) {
-      updateQueryFilter(
-        query,
-        tableSearchProviders.find((provider) => provider.id === mode),
-      );
-      debouncedDispatch.flush();
-    }
-  };
-
-  const renderSearchModes = () => {
-    if (tableSearchProviders.length === 0) {
-      return null;
-    }
-    const modes = [
-      { id: KEYWORD_SEARCH_MODE, label: t('start_page.search_mode.keyword') },
-      ...tableSearchProviders,
-    ];
-    return (
-      <div className={styles.searchModes}>
-        <Chips aria-label={t('start_page.search_mode.aria')}>
-          {modes.map((mode) => (
-            <Chips.Toggle
-              key={mode.id}
-              selected={searchMode === mode.id}
-              checkmark={false}
-              onClick={() => changeSearchMode(mode.id)}
-            >
-              {mode.label}
-            </Chips.Toggle>
-          ))}
-        </Chips>
-      </div>
-    );
-  };
-
-  const renderSearchNote = () => {
-    if (!searchNote || !activeSearchProvider || !getQueryFilter()) {
-      return null;
-    }
-    return (
-      <BodyShort size="medium" className={styles.searchNote}>
-        {searchNote}
-      </BodyShort>
-    );
+    debouncedDispatch(value, i18n.language);
   };
 
   const renderPagination = () => {
@@ -891,10 +801,18 @@ const StartPage = () => {
                       ?.label as string) ?? ''
                   }
                   onChange={(value: string) => {
-                    updateQueryFilter(value, activeSearchProvider);
+                    updateQueryFilter(value);
                   }}
                 />
-                {renderSearchModes()}
+                {tableSearch.renderModes(() => {
+                  const query = state.activeFilters.find(
+                    (f) => f.type === 'query',
+                  )?.label;
+                  if (query) {
+                    updateQueryFilter(query);
+                    debouncedDispatch.flush();
+                  }
+                })}
               </div>
 
               <Button
@@ -973,7 +891,10 @@ const StartPage = () => {
                     </Chips>
                   </div>
                 )}
-                {!state.error && isReadyToRender && renderSearchNote()}
+                {!state.error &&
+                  isReadyToRender &&
+                  state.activeFilters.some((f) => f.type === 'query') &&
+                  tableSearch.renderNote()}
                 {state.error && (
                   <div className={styles.errorContainer}>
                     <ErrorMessage
