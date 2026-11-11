@@ -246,8 +246,13 @@ function reducer(
       } else {
         // Query present: first narrow to API-returned table IDs, then apply
         // all other active filters on that subset.
-        queryTables = state.availableTables.filter((table) =>
-          action.payload.tableIds.includes(table.id),
+        // The tables keep the order of the IDs, which is the API's order:
+        // best match first.
+        const tablesById = new Map(
+          state.availableTables.map((table) => [table.id, table]),
+        );
+        queryTables = action.payload.tableIds.flatMap(
+          (id) => tablesById.get(id) ?? [],
         );
 
         const matcher = buildCompiledMatcher(newFilters);

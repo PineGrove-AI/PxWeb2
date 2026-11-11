@@ -554,13 +554,21 @@ const StartPage = () => {
     </>
   );
 
+  // Counts the searches started, so a slow search that is overtaken by a newer
+  // one does not overwrite its results.
+  const latestSearch = useRef(0);
+
   // Debounce the dispatch for search filter, so it waits a few moments for typing to finish
   const debouncedDispatch = useRef(
     debounce(async (value: string, language: string) => {
+      const search = ++latestSearch.current;
       let tableIds: string[] = [];
       if (value.length > 0) {
         const searchedTables = await queryTablesByKeyword(value, language);
         tableIds = searchedTables.map((table: Table) => table.id);
+      }
+      if (search !== latestSearch.current) {
+        return;
       }
       dispatch({
         type: ActionType.ADD_QUERY_FILTER,
