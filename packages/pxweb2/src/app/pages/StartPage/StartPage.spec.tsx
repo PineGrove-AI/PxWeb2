@@ -148,11 +148,14 @@ import { useTopicIcons } from '../../util/hooks/useTopicIcons';
 vi.mock('react-i18next', async () => {
   const actual =
     await vi.importActual<typeof import('react-i18next')>('react-i18next');
+  // Stable like the real t: useFilterUrlSync re-syncs the URL whenever t
+  // changes, and under MemoryRouter that would navigate on every render.
+  const t = (key: string) => key;
 
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => key,
+      t,
       i18n: {
         language: 'en',
       },
