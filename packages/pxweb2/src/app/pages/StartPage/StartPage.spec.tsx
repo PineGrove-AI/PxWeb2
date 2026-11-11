@@ -5,6 +5,7 @@ import { act, waitFor, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 import StartPage from './StartPage';
+import { queryTablesByKeyword } from '../../util/tableHandler';
 import type { StartPageState } from '../../pages/StartPage/StartPageTypes';
 import type { Table } from '@pxweb2/pxweb2-api-client';
 import { AccessibilityProvider } from '../../context/AccessibilityProvider';
@@ -45,6 +46,7 @@ vi.mock('../../util/tableHandler', () => ({
   // Used by the filter reducer when a search runs: keep every table
   buildCompiledMatcher: vi.fn(() => ({})),
   shouldTableBeIncludedWithMatcher: vi.fn(() => true),
+  queryTablesByKeyword: vi.fn(),
   getAllTables: vi.fn().mockResolvedValue([
     {
       id: '13618',
@@ -135,9 +137,13 @@ vi.mock('../../util/hooks/useTableSearchProviders', () => ({
   useTableSearchProviders: () => mockTableSearchProviders,
 }));
 
-vi.mock('../../util/tableSearchProviders', () => ({
-  searchTables: vi.fn(),
-}));
+// The real search (the keyword search, as no test here has a provider fail)
+// unless a test sets its answers
+vi.mock('../../util/tableSearchProviders', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../util/tableSearchProviders')>();
+  return { ...actual, searchTables: vi.fn(actual.searchTables) };
+});
 
 import { searchTables } from '../../util/tableSearchProviders';
 
@@ -299,6 +305,48 @@ describe('StartPage', () => {
     await waitFor(() => {
       expect(createTableListSEOMock.mock.calls.length).toBe(callsBefore);
     });
+  });
+
+  it('ignores a search answered after a newer one', async () => {
+    let answerSlowSearch: (tables: { id: string }[]) => void = () => undefined;
+    (queryTablesByKeyword as Mock)
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (answerSlowSearch = resolve)),
+      )
+      .mockResolvedValueOnce([{ id: '13618' }]);
+
+    renderWithProviders(
+      <AccessibilityProvider>
+        <MemoryRouter>
+          <StartPage />
+        </MemoryRouter>
+      </AccessibilityProvider>,
+    );
+    const search = await screen.findByPlaceholderText(
+      'start_page.search_placeholder',
+    );
+    await screen.findAllByText(/2009K1-2023K1/);
+
+    // The search is debounced, so each one starts a moment after typing.
+    fireEvent.change(search, { target: { value: 'slow' } });
+    await waitFor(() => expect(queryTablesByKeyword).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    fireEvent.change(search, { target: { value: 'newer' } });
+    await waitFor(
+      () => expect(screen.queryAllByText(/2009K1-2023K1/)).toHaveLength(0),
+      { timeout: 3000 },
+    );
+
+    await act(async () => {
+      answerSlowSearch([{ id: '13619' }]);
+    });
+
+    expect(screen.queryAllByText(/2009-2022/)).not.toHaveLength(0);
+    expect(screen.queryAllByText(/2009K1-2023K1/)).toHaveLength(0);
+
+    // The page writes its query to the URL and seeds its search from it.
+    globalThis.window.history.replaceState(null, '', '/');
   });
 
   describe('show breadcrumbs on startpage if set in config breadcrumbs', () => {
@@ -676,7 +724,6 @@ describe('StartPage', () => {
       mockTableSearchProviders = [provider];
       (searchTables as Mock).mockResolvedValue({
         tableIds: ['13619', '13618'],
-        ranked: true,
         note: 'Searched for employment by age',
       });
       renderStartPage();
@@ -708,7 +755,6 @@ describe('StartPage', () => {
       mockTableSearchProviders = [provider];
       (searchTables as Mock).mockResolvedValue({
         tableIds: ['13618'],
-        ranked: false,
       });
       renderStartPage();
 
@@ -742,7 +788,6 @@ describe('StartPage', () => {
       mockTableSearchProviders = [provider];
       (searchTables as Mock).mockResolvedValue({
         tableIds: ['13618'],
-        ranked: false,
       });
       renderStartPage();
 
@@ -779,7 +824,7 @@ describe('StartPage', () => {
 
     it('ignores a search answered after a newer one', async () => {
       mockTableSearchProviders = [provider];
-      const keywordResult = { tableIds: ['13618'], ranked: false };
+      const keywordResult = { tableIds: ['13618'] };
       let answerSlowSearch: (value: unknown) => void = () => undefined;
       (searchTables as Mock)
         .mockResolvedValueOnce(keywordResult)
@@ -789,7 +834,6 @@ describe('StartPage', () => {
         .mockResolvedValueOnce(keywordResult)
         .mockResolvedValueOnce({
           tableIds: ['13618'],
-          ranked: true,
           note: 'Fresh note',
         });
       renderStartPage();
@@ -814,7 +858,7 @@ describe('StartPage', () => {
       expect(searchTables).toHaveBeenCalledTimes(4);
 
       await act(async () => {
-        answerSlowSearch({ tableIds: [], ranked: true, note: 'Stale note' });
+        answerSlowSearch({ tableIds: [], note: 'Stale note' });
       });
 
       expect(screen.getByText('Fresh note')).toBeInTheDocument();

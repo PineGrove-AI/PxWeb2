@@ -174,7 +174,7 @@ describe('searchTables', () => {
     const result = await searchTables('q', 'en');
 
     expect(queryTablesByKeyword).toHaveBeenCalledWith('q', 'en');
-    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'], ranked: false });
+    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'] });
   });
 
   it('uses the provider when one is given', async () => {
@@ -189,7 +189,6 @@ describe('searchTables', () => {
     expect(result).toEqual({
       tableIds: ['TAB3'],
       note: undefined,
-      ranked: true,
     });
   });
 
@@ -200,6 +199,6 @@ describe('searchTables', () => {
     const result = await searchTables('q', 'en', provider);
 
     expect(queryTablesByKeyword).toHaveBeenCalledWith('q', 'en');
-    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'], ranked: false });
+    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'] });
   });
 });

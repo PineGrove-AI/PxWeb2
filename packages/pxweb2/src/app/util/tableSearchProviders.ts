@@ -23,10 +23,6 @@ export type TableSearchResult = {
   note?: string;
 };
 
-// The tables a search found. ranked: tableIds are best match first and should
-// be shown in that order.
-export type SearchTablesResult = TableSearchResult & { ranked: boolean };
-
 type TableSearchResponse = {
   tables?: { id?: unknown }[];
   note?: unknown;
@@ -123,11 +119,10 @@ export async function searchTables(
   query: string,
   language: string,
   provider?: TableSearchProvider,
-): Promise<SearchTablesResult> {
+): Promise<TableSearchResult> {
   if (provider) {
     try {
-      const result = await searchTablesWithProvider(provider, query, language);
-      return { ...result, ranked: true };
+      return await searchTablesWithProvider(provider, query, language);
     } catch (error) {
       console.warn(
         `Table search '${provider.id}' failed, using keyword search instead.`,
@@ -137,5 +132,5 @@ export async function searchTables(
   }
 
   const tables = await queryTablesByKeyword(query, language);
-  return { tableIds: tables.map((table) => table.id), ranked: false };
+  return { tableIds: tables.map((table) => table.id) };
 }
