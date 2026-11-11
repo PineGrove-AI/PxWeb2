@@ -286,6 +286,35 @@ describe('FilterContext', () => {
     expect(state.filteredTables).toHaveLength(3);
   });
 
+  it('ADD_QUERY_FILTER keeps the tables in the order of the table IDs', () => {
+    render(
+      <FilterProvider>
+        <Consumer onRender={(ctx) => (captured = ctx)} />
+      </FilterProvider>,
+    );
+
+    act(() => {
+      captured!.dispatch({
+        type: ActionType.RESET_FILTERS,
+        payload: { tables: makeTables(3), subjects: makeSubjects() },
+      });
+    });
+
+    act(() => {
+      captured!.dispatch({
+        type: ActionType.ADD_QUERY_FILTER,
+        payload: { query: 'Q1', tableIds: ['T3', 'unknown', 'T1'] },
+      });
+    });
+
+    const state = captured!.state;
+    expect(state.filteredTables.map((t) => t.id)).toEqual(['T3', 'T1']);
+    expect(state.availableTablesWhenQueryApplied.map((t) => t.id)).toEqual([
+      'T3',
+      'T1',
+    ]);
+  });
+
   it('REMOVE_FILTER removes by value or uniqueId and recomputes state', () => {
     render(
       <FilterProvider>
