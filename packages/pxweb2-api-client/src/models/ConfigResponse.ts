@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { ApiFeature } from './ApiFeature';
 import type { Language } from './Language';
+import type { Plugin } from './Plugin';
 import type { SourceReference } from './SourceReference';
 /**
  * API configuration
@@ -57,5 +58,9 @@ export type ConfigResponse = {
      * A list of features for the API
      */
     features?: Array<ApiFeature>;
+    /**
+     * External services available through the API. Requests to a plugin's path are forwarded to the plugin.
+     */
+    plugins?: Array<Plugin>;
 };
 

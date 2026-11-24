@@ -81,6 +81,10 @@
     "result_hidden_header": "Result",
     "search_label": "Search in PxWeb 2.0",
     "search_placeholder": "",
+    "search_mode": {
+      "aria": "Search mode",
+      "keyword": "Keyword search"
+    },
     "skip_to.filter": "Skip to filter",
     "skip_to.result": "Skip to result",
     "filter": {

@@ -44,7 +44,8 @@ import { useTopicIcons } from '../../util/hooks/useTopicIcons';
 import useApp from '../../context/useApp';
 import { getConfig } from '../../util/config/getConfig';
 import { FilterContext, FilterProvider } from '../../context/FilterContext';
-import { getAllTables, queryTablesByKeyword } from '../../util/tableHandler';
+import { getAllTables } from '../../util/tableHandler';
+import { useTableSearchModes } from './useTableSearchModes';
 import { tableListIsReadyToRender } from '../../util/startPageRender';
 import useFilterUrlSync from '../../util/hooks/useFilterUrlSync';
 import StartpageDetails from '../../components/StartPageDetails/StartPageDetails';
@@ -84,6 +85,7 @@ const StartPage = () => {
   const [isPaginating, setIsPaginating] = useState(false);
   const [paginationButtonWidth, setPaginationButtonWidth] = useState<number>();
   const [isFadingTableList, setIsFadingTableList] = useState(false);
+  const tableSearch = useTableSearchModes();
 
   const filterBackButtonRef = useRef<HTMLButtonElement>(null);
   const filterToggleRef = useRef<HTMLButtonElement>(null);
@@ -564,8 +566,10 @@ const StartPage = () => {
       const search = ++latestSearch.current;
       let tableIds: string[] = [];
       if (value.length > 0) {
-        const searchedTables = await queryTablesByKeyword(value, language);
-        tableIds = searchedTables.map((table: Table) => table.id);
+        tableIds = await tableSearch.search(value, language);
+      }
+      if (search !== latestSearch.current) {
+        return;
       }
       if (search !== latestSearch.current) {
         return;
@@ -803,6 +807,15 @@ const StartPage = () => {
                     updateQueryFilter(value);
                   }}
                 />
+                {tableSearch.renderModes(() => {
+                  const query = state.activeFilters.find(
+                    (f) => f.type === 'query',
+                  )?.label;
+                  if (query) {
+                    updateQueryFilter(query);
+                    debouncedDispatch.flush();
+                  }
+                })}
               </div>
 
               <Button
@@ -881,6 +894,10 @@ const StartPage = () => {
                     </Chips>
                   </div>
                 )}
+                {!state.error &&
+                  isReadyToRender &&
+                  state.activeFilters.some((f) => f.type === 'query') &&
+                  tableSearch.renderNote()}
                 {state.error && (
                   <div className={styles.errorContainer}>
                     <ErrorMessage

@@ -307,6 +307,10 @@ vi.mock('@pxweb2/pxweb2-api-client', () => {
       WEEKLY: 'Weekly',
       OTHER: 'Other',
     },
+    // An API without plugins: no table search providers on the start page
+    ConfigurationService: {
+      getApiConfiguration: vi.fn().mockResolvedValue({ features: [] }),
+    },
     TablesService: {
       listAllTables: async () => ({
         language: 'en',

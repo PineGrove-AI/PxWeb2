@@ -80,6 +80,10 @@
     "result_hidden_header": "النتيجة",
     "search_label": "ابحث في PxWeb 2.0",
     "search_placeholder": "",
+    "search_mode": {
+      "aria": "وضع البحث",
+      "keyword": "البحث بالكلمات المفتاحية"
+    },
     "skip_to.filter": "انتقل إلى عوامل التصفية",
     "skip_to.result": "انتقل إلى النتائج",
     "filter": {
