@@ -286,7 +286,7 @@ describe('FilterContext', () => {
     expect(state.filteredTables).toHaveLength(3);
   });
 
-  it('ADD_QUERY_FILTER keeps the table list order unless the result is ranked', () => {
+  it('ADD_QUERY_FILTER keeps the tables in the order of the table IDs', () => {
     render(
       <FilterProvider>
         <Consumer onRender={(ctx) => (captured = ctx)} />
@@ -303,24 +303,7 @@ describe('FilterContext', () => {
     act(() => {
       captured!.dispatch({
         type: ActionType.ADD_QUERY_FILTER,
-        payload: { query: 'Q1', tableIds: ['T3', 'T1'] },
-      });
-    });
-
-    expect(captured!.state.filteredTables.map((t) => t.id)).toEqual([
-      'T1',
-      'T3',
-    ]);
-
-    // Ranked: the order of the IDs, skipping unknown and repeated IDs
-    act(() => {
-      captured!.dispatch({
-        type: ActionType.ADD_QUERY_FILTER,
-        payload: {
-          query: 'Q2',
-          tableIds: ['T3', 'UNKNOWN', 'T1', 'T3'],
-          ranked: true,
-        },
+        payload: { query: 'Q1', tableIds: ['T3', 'unknown', 'T1'] },
       });
     });
 

@@ -23,6 +23,7 @@ import EmtyList from './EmtyList/EmtyList';
 
 type VariableGroup = 'header' | 'stub';
 const MINIMUM_ITEM_HEIGHT = 40;
+const DROP_ZONE_BOTTOM_EXTENSION = MINIMUM_ITEM_HEIGHT * 3;
 type DragEvent = MouseEvent | TouchEvent | PointerEvent;
 type DropPreview = {
   group: VariableGroup;
@@ -192,12 +193,17 @@ export function ManualPivot({
     });
   };
 
+  const capitalizeLabel = (label: string): string =>
+    label.charAt(0).toUpperCase() + label.slice(1);
+
   /** Returns the nearest drop zone containing or close to a pointer position. */
   const getGroupAtPoint = (x: number, y: number): VariableGroup | null => {
     const hitPadding = 20;
     const groupSwitchHysteresis = 14;
     /** Calculates the shortest distance from a point to a rectangle. */
-    const distanceToRect = (rect: DOMRect): number => {
+    const distanceToRect = (
+      rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>,
+    ): number => {
       const dx = Math.max(rect.left - x, 0, x - rect.right);
       const dy = Math.max(rect.top - y, 0, y - rect.bottom);
       return Math.hypot(dx, dy);
@@ -210,11 +216,26 @@ export function ManualPivot({
       return null;
     }
 
+    const sharedBottom =
+      Math.max(
+        headerRect?.bottom ?? Number.NEGATIVE_INFINITY,
+        stubRect?.bottom ?? Number.NEGATIVE_INFINITY,
+      ) + DROP_ZONE_BOTTOM_EXTENSION;
+    const getGroupDistance = (rect: DOMRect | undefined) =>
+      rect
+        ? distanceToRect({
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: sharedBottom,
+          })
+        : Number.POSITIVE_INFINITY;
+
     const headerDistance = headerRect
-      ? distanceToRect(headerRect)
+      ? getGroupDistance(headerRect)
       : Number.POSITIVE_INFINITY;
     const stubDistance = stubRect
-      ? distanceToRect(stubRect)
+      ? getGroupDistance(stubRect)
       : Number.POSITIVE_INFINITY;
     const currentHoveredGroup = hoveredGroupRef.current;
 
@@ -427,12 +448,13 @@ export function ManualPivot({
     const groupItems = getItemsForGroup(group);
     const itemIndex = groupItems.findIndex((item) => item.id === itemId);
     const itemLabel = getItemById(itemId)?.label;
-    if (itemLabel && itemIndex !== -1) {
+    const capitalizedItemLabel = itemLabel ? capitalizeLabel(itemLabel) : '';
+    if (capitalizedItemLabel && itemIndex !== -1) {
       setLiveAnnouncement(
         t(
           'presentation_page.side_menu.edit.customize.manual_pivoting.manual_pivoting_modal.item_moved',
           {
-            item: itemLabel,
+            item: capitalizedItemLabel,
             position: itemIndex + 1,
             group: getGroupLabel(group),
           },
@@ -455,11 +477,13 @@ export function ManualPivot({
     keyboardDraggedItemIdRef.current = variableId;
 
     const itemLabel = getItemById(variableId)?.label;
-    if (itemLabel) {
+    const capitalizedItemLabel = itemLabel ? capitalizeLabel(itemLabel) : '';
+
+    if (capitalizedItemLabel) {
       setLiveAnnouncement(
         t(
           'presentation_page.side_menu.edit.customize.manual_pivoting.manual_pivoting_modal.item_selected',
-          { item: itemLabel },
+          { item: capitalizedItemLabel },
         ),
       );
     }
@@ -550,12 +574,13 @@ export function ManualPivot({
 
     if (draggedItemId && sourceGroup) {
       const itemLabel = getItemById(draggedItemId)?.label;
+      const capitalizedItemLabel = itemLabel ? capitalizeLabel(itemLabel) : '';
       const groupLabel = getGroupLabel(sourceGroup);
-      if (itemLabel) {
+      if (capitalizedItemLabel) {
         setLiveAnnouncement(
           t(
             'presentation_page.side_menu.edit.customize.manual_pivoting.manual_pivoting_modal.item_dropped',
-            { item: itemLabel, group: groupLabel },
+            { item: capitalizedItemLabel, group: groupLabel },
           ),
         );
       }
@@ -578,11 +603,12 @@ export function ManualPivot({
 
     if (draggedItemId) {
       const itemLabel = getItemById(draggedItemId)?.label;
-      if (itemLabel) {
+      const capitalizedItemLabel = itemLabel ? capitalizeLabel(itemLabel) : '';
+      if (capitalizedItemLabel) {
         setLiveAnnouncement(
           t(
             'presentation_page.side_menu.edit.customize.manual_pivoting.manual_pivoting_modal.move_cancelled',
-            { item: itemLabel },
+            { item: capitalizedItemLabel },
           ),
         );
       }
@@ -919,7 +945,7 @@ export function ManualPivot({
             onKeyDown={(event) => handleItemKeyDown(event, group, variable.id)}
           >
             <DataItem
-              label={variable.label}
+              label={capitalizeLabel(variable.label)}
               isDragging={
                 isDraggedItem || keyboardDraggedItemId === variable.id
               }

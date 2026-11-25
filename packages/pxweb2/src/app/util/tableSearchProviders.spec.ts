@@ -1,16 +1,14 @@
 import { vi, type Mock } from 'vitest';
 
 import {
-  getTableSearchProviders,
   loadTableSearchProviders,
-  resetTableSearchProviders,
   searchTables,
   searchTablesWithProvider,
   type TableSearchProvider,
 } from './tableSearchProviders';
+import { resetPlugins } from './plugins';
 import { queryTablesByKeyword } from './tableHandler';
 import {
-  type ApiFeature,
   type ConfigResponse,
   ConfigurationService,
   type Table,
@@ -33,19 +31,9 @@ vi.mock('./config/getConfig', () => ({
   getConfig: () => ({ apiUrl: 'https://api.example.com/api/v2/' }),
 }));
 
-const pluginFeature: ApiFeature = {
-  id: 'smart-search',
-  params: [
-    { key: 'plugin', value: 'true' },
-    { key: 'path', value: 'plugins/smart-search' },
-    { key: 'tableSearch', value: 'plugins/smart-search/search' },
-    { key: 'label', value: 'Smart search' },
-  ],
-};
-
 const provider: TableSearchProvider = {
-  id: 'smart-search',
-  label: 'Smart search',
+  pluginId: 'smart-search',
+  labels: [{ language: 'en', text: 'Smart search' }],
   url: 'https://api.example.com/api/v2/plugins/smart-search/search',
 };
 
@@ -59,59 +47,26 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  resetTableSearchProviders();
-});
-
-describe('getTableSearchProviders', () => {
-  it('returns the features that have a table search, with absolute URLs', () => {
-    const providers = getTableSearchProviders(
-      [{ id: 'other-feature', params: [] }, pluginFeature],
-      'https://api.example.com/api/v2/',
-    );
-
-    expect(providers).toEqual([provider]);
-  });
-
-  it('uses the feature id when there is no label', () => {
-    const providers = getTableSearchProviders(
-      [{ id: 'nameless', params: [{ key: 'tableSearch', value: '/search' }] }],
-      '//api.example.com/api/v2',
-    );
-
-    expect(providers).toEqual([
-      {
-        id: 'nameless',
-        label: 'nameless',
-        url: '//api.example.com/api/v2/search',
-      },
-    ]);
-  });
-
-  it('returns no providers when there are no features', () => {
-    expect(getTableSearchProviders(undefined, 'https://x')).toEqual([]);
-    expect(getTableSearchProviders([], 'https://x')).toEqual([]);
-  });
+  resetPlugins();
 });
 
 describe('loadTableSearchProviders', () => {
-  it('loads the providers from the API configuration once', async () => {
-    const configSpy = vi
-      .mocked(ConfigurationService.getApiConfiguration)
-      .mockResolvedValue({
-        features: [pluginFeature],
-      } as ConfigResponse as never);
+  it('returns the plugins with a tableSearch capability', async () => {
+    vi.mocked(ConfigurationService.getApiConfiguration).mockResolvedValue({
+      plugins: [
+        {
+          id: 'smart-search',
+          path: 'plugins/smart-search',
+          labels: [{ language: 'en', text: 'Smart search' }],
+          capabilities: [
+            { type: 'tableSearch', path: 'plugins/smart-search/search' },
+          ],
+        },
+        { id: 'other', path: 'plugins/other', capabilities: [] },
+      ],
+    } as ConfigResponse as never);
 
     expect(await loadTableSearchProviders()).toEqual([provider]);
-    expect(await loadTableSearchProviders()).toEqual([provider]);
-    expect(configSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns no providers when the API configuration cannot be loaded', async () => {
-    vi.mocked(ConfigurationService.getApiConfiguration).mockRejectedValue(
-      new Error('Network error') as never,
-    );
-
-    expect(await loadTableSearchProviders()).toEqual([]);
   });
 });
 
@@ -174,7 +129,7 @@ describe('searchTables', () => {
     const result = await searchTables('q', 'en');
 
     expect(queryTablesByKeyword).toHaveBeenCalledWith('q', 'en');
-    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'], ranked: false });
+    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'] });
   });
 
   it('uses the provider when one is given', async () => {
@@ -189,7 +144,6 @@ describe('searchTables', () => {
     expect(result).toEqual({
       tableIds: ['TAB3'],
       note: undefined,
-      ranked: true,
     });
   });
 
@@ -200,6 +154,6 @@ describe('searchTables', () => {
     const result = await searchTables('q', 'en', provider);
 
     expect(queryTablesByKeyword).toHaveBeenCalledWith('q', 'en');
-    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'], ranked: false });
+    expect(result).toEqual({ tableIds: ['TAB1', 'TAB3'] });
   });
 });
